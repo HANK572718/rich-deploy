@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# Poetry
+poetry.lock
+
+# Private key — NEVER commit
+tools/private_key.pem
+
+# License files
+*.lic
+
+# Claude Code
+.claude/
+CLAUDE.md
