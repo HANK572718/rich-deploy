@@ -11,9 +11,19 @@
 
 > 日常發授權只需要這三個步驟，不需要讀完整份文件。
 
-### 前置：初始化金鑰（只做一次）
+### 前置：初始化（只做一次）
 
-在**你的開發機**執行，產生 RSA 金鑰對：
+在**你的開發機**執行，建立資料庫並進入 Master CLI：
+
+```bash
+poetry run python tools/main.py
+```
+
+首次執行會自動建立 `db/registry.db`。在 CLI 中依序：
+1. `[p]` 新增專案
+2. `[k]` 為專案產生金鑰對
+
+或直接用舊腳本產生單組金鑰：
 
 ```bash
 poetry run python tools/generate_keys.py
@@ -28,7 +38,7 @@ poetry run python tools/generate_keys.py
 在甲方機器上執行（只需要 Python，無需安裝任何套件）：
 
 ```bash
-python client/get_fingerprint.py
+python client_sdk/get_fingerprint.py
 ```
 
 複製印出的 64 字元指紋，透過訊息或 email 傳給你自己。
@@ -67,9 +77,12 @@ $env:NHAD_LICENSE_FILE = "C:\path\to\license.lic"
 
 | 腳本 | 在哪執行 | 用途 |
 |------|---------|------|
-| `tools/generate_keys.py` | 開發機（只做一次） | 產生 RSA 金鑰對 |
-| `client/get_fingerprint.py` | **甲方機器** | 採集硬體指紋，無需任何套件 |
-| `tools/sign_license.py` | **開發機** | 用私鑰簽章，產生 `license.lic` |
+| `tools/main.py` | **開發機**（每次使用） | Master CLI：專案 / 金鑰 / 授權管理 |
+| `tools/generate_keys.py` | 開發機（只做一次） | 直接產生單組 RSA 金鑰對 |
+| `client_sdk/get_fingerprint.py` | **甲方機器** | 採集硬體指紋，無需任何套件 |
+| `client_sdk/verify_license.py` | 甲方機器（整合進程式） | 三道關卡驗證授權 |
+| `client_sdk/bootstrap.py` | 開發機模擬 / 客戶部署精靈 | 雙模式：測試管線或引導客戶安裝 |
+| `tools/sign_license.py` | **開發機** | CLI 直接簽章（不用 DB） |
 
 ---
 
@@ -205,7 +218,7 @@ RSA-2048  +  PKCS#1 v1.5 padding  +  SHA-256 hash
 ### 指紋產生流程
 
 ```python
-# 虛擬碼，完整實作見 client/get_fingerprint.py
+# 虛擬碼，完整實作見 client_sdk/get_fingerprint.py
 
 parts = []
 parts.append(f"mac:{MAC 位址}")           # 所有平台
@@ -393,27 +406,67 @@ WSL2 是一個在 Hyper-V 虛擬機上跑的 Linux，其識別碼行為：
 
 ```
 rich_deploy/
-├── client/
-│   └── get_fingerprint.py   ← 給甲方執行，不含任何秘密，可自由散布
+│
+├── client_sdk/
+│   ├── get_fingerprint.py     ← 給甲方執行，不含任何秘密，可自由散布
+│   ├── verify_license.py      ← 三道關卡驗證，部署前替換 PUBLIC_KEY_PEM
+│   └── bootstrap.py           ← 雙模式：開發機測試 / 客戶部署精靈
+│
 ├── tools/
-│   ├── generate_keys.py     ← 一次性產生 RSA 金鑰對（只在開發機執行）
-│   ├── sign_license.py      ← 簽章腳本（只在開發機執行）
-│   ├── private_key.pem      ← 私鑰，已加入 .gitignore，絕不提交
-│   └── public_key.pem       ← 公鑰，可隨程式一起發布
+│   ├── db/
+│   │   ├── __init__.py
+│   │   ├── models.py          ← SQLAlchemy ORM（Project / Key / License）
+│   │   ├── engine.py          ← DB engine + Session 工廠
+│   │   └── crud.py            ← 所有 CRUD 操作
+│   ├── main.py                ← Master CLI 入口
+│   ├── cmd_project.py         ← 專案管理指令
+│   ├── cmd_keys.py            ← 金鑰管理指令
+│   ├── cmd_license.py         ← 授權管理指令
+│   ├── generate_keys.py       ← 一次性產生單組 RSA 金鑰對
+│   ├── sign_license.py        ← CLI 直接簽章腳本
+│   ├── private_key.pem        ← 私鑰，已加入 .gitignore，絕不提交
+│   └── public_key.pem         ← 公鑰，可隨程式一起發布
+│
+├── projects/                  ← 各專案私鑰實體檔案（.gitignore 忽略私鑰）
+│   └── NHAD/
+│       └── keys/
+│           └── public_key_v1.pem
+│
+├── db/
+│   └── registry.db            ← SQLite 主檔（.gitignore 忽略）
+│
+├── docs/
+│   ├── design_discussion_summary.md
+│   ├── six_hats_analysis.md
+│   ├── tpm_trends_and_integration.md
+│   └── dongle_architecture.md
+│
+├── rich_deploy.toml           ← 全域設定（DB URL、預設值）
 ├── .gitignore
 ├── pyproject.toml
 └── README.md
 ```
 
+### 資料流總覽
+
+```
+DB（registry.db）= 定義層
+  Project / Key / License 台帳，是一切的唯一來源
+
+檔案 = 副產物
+  *.pem  金鑰檔（可從 DB 重建公鑰，私鑰需獨立備份）
+  *.lic  授權檔（可從 DB 的 license_json 重建）
+```
+
 ### 各腳本的依賴關係
 
 ```
-get_fingerprint.py          sign_license.py         generate_keys.py
-────────────────────        ──────────────────────  ────────────────────
-標準函式庫只：              cryptography 套件：     cryptography 套件：
-  hashlib                     asymmetric.padding      asymmetric.rsa
-  platform                    hashes                  primitives.serialization
-  uuid                        serialization
+get_fingerprint.py          verify_license.py       sign_license.py
+────────────────────        ──────────────────────  ──────────────────
+標準函式庫只：              cryptography            cryptography
+  hashlib                   get_fingerprint         sqlalchemy（透過 DB）
+  platform                  （自動匯入）
+  uuid
   winreg（Windows）
   pathlib
 ```
@@ -476,7 +529,7 @@ poetry run python tools/generate_keys.py
 在**甲方機器**上執行（只需要 Python，不需要安裝 Poetry 或任何套件）：
 
 ```bash
-python client/get_fingerprint.py
+python client_sdk/get_fingerprint.py
 ```
 
 輸出範例：
@@ -727,7 +780,7 @@ ISO 8601 格式：`YYYY-MM-DD`，例如 `2027-12-31`。
 本機同時模擬兩個角色：
 
   [甲方機器角色]                    [開發機角色]
-  client/get_fingerprint.py  ──→  tools/sign_license.py
+  client_sdk/get_fingerprint.py  ──→  tools/sign_license.py
         ↓ 複製指紋                       ↓ 複製 JSON
                           ←── license.lic 存在本機任意路徑
 ```
@@ -759,7 +812,7 @@ poetry run python tools/generate_keys.py
 ### 步驟二：扮演甲方，取得本機指紋
 
 ```bash
-poetry run python client/get_fingerprint.py
+poetry run python client_sdk/get_fingerprint.py
 ```
 
 預期輸出（你的指紋值會不同）：
@@ -905,7 +958,7 @@ unset NHAD_LICENSE_FILE
 
 ```
 ① poetry run python tools/generate_keys.py      ← 只做一次
-② poetry run python client/get_fingerprint.py   ← 取得指紋
+② poetry run python client_sdk/get_fingerprint.py   ← 取得指紋
 ③ poetry run python tools/sign_license.py <指紋> --expires YYYY-MM-DD
                                                  ← 產生授權 JSON
 ④ 將 JSON 存成 license.lic

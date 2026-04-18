@@ -7,11 +7,17 @@ __pycache__/
 # Poetry
 poetry.lock
 
-# Private key — NEVER commit
+# Private keys — NEVER commit
 tools/private_key.pem
+projects/*/keys/private_key*.pem
+
+# SQLite database
+db/registry.db
+db/*.db
 
 # License files
 *.lic
+projects/*/licenses/*.lic
 
 # Claude Code
 .claude/

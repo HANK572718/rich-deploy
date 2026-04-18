@@ -25,6 +25,8 @@ import sys
 import uuid
 from pathlib import Path
 
+CURRENT_FP_VERSION = 1
+
 # BIOS fields that indicate the OEM never populated the value.
 _BIOS_INVALID = frozenset({
     "",
@@ -157,17 +159,10 @@ def get_mac_hint() -> str | None:
     return None
 
 
-# ── Public API ────────────────────────────────────────────────────────────────
+# ── Versioned fingerprint computation ────────────────────────────────────────
 
-def get_fingerprint() -> str:
-    """Return a SHA-256 hex fingerprint from stable machine identifiers only.
-
-    The fingerprint is composed of:
-      - Layer 1: OS system ID (MachineGuid / machine-id / IOPlatformUUID)
-      - Layer 2: BIOS/EFI UUID
-
-    MAC address is excluded by design. See module docstring for rationale.
-    """
+def _collect_all_parts() -> list[str]:
+    """Collect all available hardware identifier strings."""
     parts: list[str] = []
     system = platform.system()
 
@@ -181,12 +176,37 @@ def get_fingerprint() -> str:
         _collect_macos_sysid(parts)
         _collect_bios_macos(parts)
 
+    return parts
+
+
+def _compute_v1(parts: list[str]) -> str:
+    """v1: SHA-256(sorted([os_system_id, bios_uuid]))."""
+    return hashlib.sha256("|".join(sorted(parts)).encode()).hexdigest()
+
+
+def get_fingerprint(version: int = CURRENT_FP_VERSION) -> str:
+    """Return a versioned SHA-256 hex fingerprint from stable machine identifiers.
+
+    Args:
+        version: Fingerprint algorithm version. Defaults to CURRENT_FP_VERSION.
+
+    Returns:
+        64-character lowercase hex string.
+    """
+    dispatchers = {
+        1: _compute_v1,
+        # 2: _compute_v2,  # reserved for TPM EK integration
+        # 3: _compute_v3,  # reserved for dongle binding
+    }
+    if version not in dispatchers:
+        raise ValueError(f"Unknown fingerprint version: {version}")
+
+    parts = _collect_all_parts()
     if not parts:
         print("ERROR: 無法取得機器識別碼", file=sys.stderr)
         sys.exit(1)
 
-    raw = "|".join(sorted(parts))
-    return hashlib.sha256(raw.encode()).hexdigest()
+    return dispatchers[version](parts)
 
 
 if __name__ == "__main__":

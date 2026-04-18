@@ -5,6 +5,7 @@ Usage:
     python sign_license.py <fingerprint>
     python sign_license.py <fingerprint> --expires 2027-12-31
     python sign_license.py <fingerprint> --expires 2027-12-31 --mac aa:bb:cc:dd:ee:ff --note "客戶名稱"
+    python sign_license.py <fingerprint> --fp-version 1 --expires 2027-12-31
 """
 
 import argparse
@@ -46,6 +47,7 @@ def sign(
     expires: str | None = None,
     mac_hint: str | None = None,
     note: str | None = None,
+    fp_version: int = 1,
 ) -> dict:
     """Sign *fingerprint* and return the license dict ready for serialisation.
 
@@ -53,21 +55,24 @@ def sign(
     the signed payload and does NOT affect license validation. This allows
     NIC replacement, VM network rebuilds, and Wi-Fi MAC randomisation to
     occur without invalidating the license.
+
+    fp_version is included in the signed payload to prevent downgrade attacks.
     """
     fingerprint = _validate_fingerprint(fingerprint.strip())
     private_key = _load_private_key(_PRIVATE_KEY_PATH)
 
-    # Signed payload: only stable identifiers participate.
+    # Signed payload includes fp_version to prevent downgrade attacks.
     # MAC is intentionally excluded so hardware changes don't break licenses.
-    payload = fingerprint
+    payload = f"{fingerprint}|fp_version:{fp_version}"
     if expires:
-        payload = f"{fingerprint}|expires:{expires}"
+        payload += f"|expires:{expires}"
 
     signature = private_key.sign(payload.encode(), PKCS1v15(), SHA256())
     sig_b64 = base64.b64encode(signature).decode()
 
     license_data: dict = {
         "fingerprint": fingerprint,
+        "fp_version": fp_version,
         "signature": sig_b64,
         "note": note or "此授權僅限本機使用",
     }
@@ -109,6 +114,14 @@ def main() -> None:
         default=None,
         help="Human-readable note to embed in the license (e.g. customer name)",
     )
+    parser.add_argument(
+        "--fp-version",
+        metavar="N",
+        type=int,
+        default=1,
+        dest="fp_version",
+        help="Fingerprint algorithm version (default: 1)",
+    )
     args = parser.parse_args()
 
     license_data = sign(
@@ -116,6 +129,7 @@ def main() -> None:
         expires=args.expires,
         mac_hint=args.mac_hint,
         note=args.note,
+        fp_version=args.fp_version,
     )
     output = json.dumps(license_data, indent=2, ensure_ascii=False)
 
