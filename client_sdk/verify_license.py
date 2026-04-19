@@ -21,7 +21,15 @@ from pathlib import Path
 
 # ── Deploy-time constants (replace per project) ───────────────────────────────
 
-PUBLIC_KEY_PEM: bytes = b""  # paste public key PEM here
+PUBLIC_KEY_PEM: bytes = b"""-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjOoM2fT+y03STiezvu/C
+FdBuKtTTDEF4CeeUFCIRK79woUztzd6vb0azEc9AnZnzyCiXl3BnJvT588it1yN3
+fgk+CrLVGQnhKsZbfeMOk+W8IOXk6+YgtK/Fjk9JcN/WITTwO+EV/YJUlCutLcWY
+gYHO7VXCOi91RfMFEVuEfxkwtn/5HtX1n2QvgrnQDX39AbHJBo4W1pXxIp1dNGtn
+UFH8BzX/PxsKfj+K8syPwh6wxLclTeHxtApQBaaNCRwhurQgcy6bVa4y6Vgv2spB
+ybYGVOEZyHakx8i6e4EPWt1xqCIpE3JuOkPmyH4p0ld5sWiHdH51U3u4v855DYfk
+SwIDAQAB
+-----END PUBLIC KEY-----"""
 ENV_PREFIX: str = "PROJ"
 
 # ─────────────────────────────────────────────────────────────────────────────
