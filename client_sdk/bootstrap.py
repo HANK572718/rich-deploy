@@ -75,8 +75,18 @@ def _run_dev_simulation() -> None:
             lic["signature"] = base64.b64encode(b"INVALID_SIG").decode()
         return lic
 
+    def _import_verify():
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "verify_license", _HERE / "verify_license.py"
+        )
+        mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        return mod.verify_license
+
+    _vl = _import_verify()
+
     def _verify_from_dict(lic_dict: dict) -> bool:
-        from client_sdk.verify_license import verify_license as _vl
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".lic", delete=False, encoding="utf-8"
         ) as f:
@@ -196,9 +206,12 @@ def _run_customer_wizard() -> None:
     if pubkey_path:
         pub_pem = Path(pubkey_path).read_bytes()
 
-    from client_sdk.verify_license import PUBLIC_KEY_PEM, verify_license
-    pem = pub_pem or PUBLIC_KEY_PEM
-    ok = verify_license(license_path=lic_path, public_key_pem=pem)
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("verify_license", _HERE / "verify_license.py")
+    _vmod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
+    _spec.loader.exec_module(_vmod)  # type: ignore[union-attr]
+    pem = pub_pem or _vmod.PUBLIC_KEY_PEM
+    ok = _vmod.verify_license(license_path=lic_path, public_key_pem=pem)
 
     if not ok:
         console.print("[red]✗ 授權驗證失敗，請確認檔案是否正確或聯繫授權方。[/red]")

@@ -771,197 +771,167 @@ ISO 8601 格式：`YYYY-MM-DD`，例如 `2027-12-31`。
 
 ## 12. 本機模擬練習
 
-> 在真正發授權給甲方前，先在自己的電腦上把整個流程走一遍。
-> 你同時扮演「甲方機器」和「開發機」兩個角色，所有操作都在同一台機器完成。
-
-### 情境說明
-
-```
-本機同時模擬兩個角色：
-
-  [甲方機器角色]                    [開發機角色]
-  client_sdk/get_fingerprint.py  ──→  tools/sign_license.py
-        ↓ 複製指紋                       ↓ 複製 JSON
-                          ←── license.lic 存在本機任意路徑
-```
+本機模擬分兩種方式：**自動模擬**（一行指令）和**手動逐步**（學習用）。
 
 ---
 
-### 步驟一：確認金鑰存在
+### 方式 A：自動模擬（推薦，30 秒完成）
+
+`bootstrap.py` 偵測到 `tools/private_key.pem` 存在時，自動進入開發機模式，
+一次跑完四個驗證情境並列表報告結果。
+
+**前置條件：確認金鑰存在**
 
 ```bash
 ls tools/private_key.pem tools/public_key.pem
 ```
 
-若顯示「找不到檔案」，先執行一次金鑰初始化：
+若找不到，先初始化：
 
 ```bash
 poetry run python tools/generate_keys.py
 ```
 
-預期輸出：
+**執行模擬：**
+
+```bash
+poetry run python client_sdk/bootstrap.py
+```
+
+**預期輸出：**
 
 ```
-金鑰已生成：
-  私鑰 → ...\tools\private_key.pem
-  公鑰 → ...\tools\public_key.pem
+╭──────────────────────────────────────╮
+│  rich_deploy — 開發機模擬測試        │
+╰──────────────────────────────────────╯
+
+ 測試項目                結果   說明
+ [1/4] 正常授權驗證       ✓     應通過
+ [2/4] 竄改指紋 → 關卡一攔截  ✓  符合預期
+ [3/4] 過期授權 → 關卡二攔截  ✓  符合預期
+ [4/4] 竄改簽章 → 關卡三攔截  ✓  符合預期
+
+全部 4 項測試通過 ✓
 ```
+
+四項全綠即表示整個簽章 + 驗證管線正常。
 
 ---
 
-### 步驟二：扮演甲方，取得本機指紋
+### 方式 B：手動逐步（了解每個環節）
+
+#### 步驟一：取得本機指紋（模擬甲方）
 
 ```bash
 poetry run python client_sdk/get_fingerprint.py
 ```
 
-預期輸出（你的指紋值會不同）：
+輸出範例：
 
 ```
 ============================================================
 請複製以下指紋字串，傳給授權方：
 ============================================================
-cd668926847b3b7f31545a26284a66c117ccbfb7080a1882779765a0e8761a9a
+3335b4a38bfd260d6754f6195583a83a4a239d0cbc7370becfb9fa2636468042
+
+（參考用 MAC 位址：dc4546be46c4，不影響授權驗證）
 ============================================================
 ```
 
-把這串指紋複製起來，留在剪貼簿備用。
+複製那串 64 字元指紋備用。
 
 ---
 
-### 步驟三：扮演開發機，簽章產生授權檔
-
-將剛才的指紋貼入下列指令（加上一個月後的到期日做測試）：
+#### 步驟二：簽章產生授權檔（模擬開發機）
 
 ```bash
-# Windows
-poetry run python tools/sign_license.py <貼上你的指紋> --expires 2026-05-17
-
-# 實際範例（請換成你自己的指紋）
-poetry run python tools/sign_license.py cd668926847b3b7f31545a26284a66c117ccbfb7080a1882779765a0e8761a9a --expires 2026-05-17
+poetry run python tools/sign_license.py <貼上指紋> --expires 2027-12-31 --note "測試客戶"
 ```
 
-預期輸出：
+輸出範例：
 
 ```
 ============================================================
 請複製以下內容，在甲方機器上存成 license.lic：
 ============================================================
 {
-  "fingerprint": "cd668926847b3b7f31545a26284a66c117ccbfb7080a1882779765a0e8761a9a",
-  "signature": "RcJz7VX8...(base64)...",
-  "note": "此授權僅限本機使用",
-  "expires": "2026-05-17"
+  "fingerprint": "3335b4a3...",
+  "fp_version": 1,
+  "signature": "FtLOY6hO...",
+  "note": "測試客戶",
+  "expires": "2027-12-31"
 }
 ============================================================
 ```
 
-將 `{` 到 `}` 的整段 JSON 複製起來。
+將整段 JSON 存成 `license.lic`。
 
 ---
 
-### 步驟四：扮演甲方，存成 license.lic
-
-將 JSON 貼入新檔案並存檔：
+#### 步驟三：驗證授權（模擬甲方）
 
 ```bash
-# 在專案根目錄建立測試用的授權檔
-# 直接把複製的 JSON 貼入你的編輯器，存成 license.lic
-```
-
-或用指令快速建立（Windows PowerShell）：
-
-```powershell
-@"
-{
-  "fingerprint": "貼上你的指紋",
-  "signature": "貼上 signature 值",
-  "note": "此授權僅限本機使用",
-  "expires": "2026-05-17"
-}
-"@ | Out-File -Encoding utf8 license.lic
-```
-
----
-
-### 步驟五：執行驗證，確認授權合法
-
-使用第 9 節的 `verify_license.py` 範例（需先建立該檔案），或直接用 Python 快速驗證：
-
-```bash
-# 設定環境變數指向剛才建立的授權檔
-# Windows PowerShell
-$env:NHAD_LICENSE_FILE = "license.lic"
-poetry run python verify_license.py
-
-# Linux / macOS
-NHAD_LICENSE_FILE=license.lic poetry run python verify_license.py
+poetry run python client_sdk/verify_license.py license.lic --pubkey tools/public_key.pem
 ```
 
 預期輸出：
 
 ```
-授權驗證通過 ✓
+✓ 授權驗證通過
 ```
 
 ---
 
-### 步驟六：測試錯誤情境（選做）
+#### 步驟四：測試三道防護關卡
 
-確認防護機制真的有效：
-
-**情境 A：竄改指紋**
-
-用文字編輯器打開 `license.lic`，把 `fingerprint` 最後幾個字元改掉，再執行驗證：
+**關卡一 — 竄改指紋：** 用編輯器把 `license.lic` 的 `fingerprint` 最後幾字改掉
 
 ```
-預期輸出：授權無效或已過期 ✗
-原因：指紋不符本機（關卡一失敗）
+預期：✗ 關卡一：指紋不符，此授權不屬於本機
 ```
 
-**情境 B：竄改到期日**
-
-把 `expires` 改成昨天的日期（例如 `"2026-04-16"`），再執行驗證：
+**關卡二 — 過期：** 把 `expires` 改成昨天（例如 `"2026-04-18"`）
 
 ```
-預期輸出：授權無效或已過期 ✗
-原因：到期日已過（關卡二失敗）
+預期：✗ 關卡二：授權已於 2026-04-18 到期
 ```
 
-**情境 C：竄改 signature**
-
-把 `signature` 的值改成任意字串，再執行驗證：
+**關卡三 — 竄改簽章：** 把 `signature` 改成任意字串
 
 ```
-預期輸出：授權無效或已過期 ✗
-原因：簽章不符（關卡三失敗）
+預期：✗ 關卡三：簽章驗證失敗
 ```
 
 ---
 
-### 練習完成後的清理
+#### 步驟五：使用 Master CLI 走完整多專案流程（選做）
 
 ```bash
-# 刪除測試用的授權檔
-rm license.lic
-
-# 取消環境變數（Windows PowerShell）
-Remove-Item Env:NHAD_LICENSE_FILE
-
-# 取消環境變數（Linux / macOS）
-unset NHAD_LICENSE_FILE
+poetry run python tools/main.py
 ```
+
+在 CLI 中：
+1. `[p]` → 新增 → 填入專案 ID / 名稱 / 環境變數前綴
+2. `[k]` → 產生金鑰 → 選剛才的專案
+3. `[l]` → 簽發授權 → 貼上指紋 → 設到期日 → 取得 JSON + 寫入 DB
 
 ---
 
-### 練習流程速查
+### 流程速查
 
 ```
-① poetry run python tools/generate_keys.py      ← 只做一次
+# 自動模擬（一行）
+poetry run python client_sdk/bootstrap.py
+
+# 手動逐步
+① poetry run python tools/generate_keys.py          ← 初始化（只做一次）
 ② poetry run python client_sdk/get_fingerprint.py   ← 取得指紋
 ③ poetry run python tools/sign_license.py <指紋> --expires YYYY-MM-DD
-                                                 ← 產生授權 JSON
+                                                     ← 產生授權 JSON
 ④ 將 JSON 存成 license.lic
-⑤ NHAD_LICENSE_FILE=license.lic poetry run python verify_license.py
-                                                 ← 驗證通過即完成
+⑤ poetry run python client_sdk/verify_license.py license.lic --pubkey tools/public_key.pem
+                                                     ← 驗證通過即完成
+
+# Master CLI（多專案管理）
+poetry run python tools/main.py
 ```
