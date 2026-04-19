@@ -87,13 +87,15 @@ def _run_dev_simulation() -> None:
     _vl = _import_verify()
 
     def _verify_from_dict(lic_dict: dict) -> bool:
+        import contextlib, io
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".lic", delete=False, encoding="utf-8"
         ) as f:
             json.dump(lic_dict, f)
             tmp = Path(f.name)
         try:
-            return _vl(license_path=tmp, public_key_pem=pub_pem)
+            with contextlib.redirect_stderr(io.StringIO()):
+                return _vl(license_path=tmp, public_key_pem=pub_pem)
         finally:
             tmp.unlink(missing_ok=True)
 
