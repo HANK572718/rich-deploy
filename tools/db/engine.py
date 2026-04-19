@@ -45,7 +45,7 @@ def init_db() -> None:
 @contextmanager
 def get_session():
     """Yield a SQLAlchemy Session and commit/rollback automatically."""
-    session = Session(get_engine())
+    session = Session(get_engine(), expire_on_commit=False)
     try:
         yield session
         session.commit()
