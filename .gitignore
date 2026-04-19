@@ -19,6 +19,9 @@ db/*.db
 *.lic
 projects/*/licenses/*.lic
 
+# Exported SDK (generated artifacts)
+dist/
+
 # Claude Code
 .claude/
 CLAUDE.md
