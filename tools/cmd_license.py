@@ -4,11 +4,18 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import questionary
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from .db.crud import create_license, get_active_key, list_licenses, revoke_license
+from .db.crud import (
+    create_license,
+    get_active_key,
+    list_licenses,
+    revoke_license,
+    update_license_file_path,
+)
 from .sign_license import sign
 from .ui import pick_project
 
@@ -23,6 +30,7 @@ def cmd_license_menu() -> None:
         console.print("\n[bold cyan]── 授權管理 ──[/bold cyan]")
         console.print("  \\[n] 簽發新授權")
         console.print("  \\[l] 列出授權記錄")
+        console.print("  \\[e] 匯出授權檔案")
         console.print("  \\[r] 撤銷授權")
         console.print("  \\[b] 返回主選單")
 
@@ -32,6 +40,8 @@ def cmd_license_menu() -> None:
             _issue_license()
         elif choice == "l":
             _list_licenses()
+        elif choice == "e":
+            _export_license()
         elif choice == "r":
             _revoke_license()
         elif choice == "b":
@@ -147,6 +157,66 @@ def _list_licenses() -> None:
         )
 
     console.print(table)
+
+
+def _pick_license(project_id: str):
+    """Interactively select a license record for *project_id* via arrow-key list.
+
+    Returns:
+        The selected License object, or None if cancelled / no records.
+    """
+    licenses = list_licenses(project_id)
+    if not licenses:
+        console.print("[dim]此專案尚無授權記錄[/dim]")
+        return None
+
+    choices = [
+        questionary.Choice(
+            title=(
+                f"#{lic.id}  {lic.client_name}"
+                f"  ({lic.machine_fp[:16]}...)"
+                f"  {'[已撤銷]' if lic.revoked else '[有效]'}"
+            ),
+            value=lic,
+        )
+        for lic in licenses
+    ]
+    choices.append(questionary.Choice(title="← 取消", value=None))
+
+    return questionary.select(
+        "選擇授權記錄（↑↓ 或 j/k 移動，Enter 確認）：",
+        choices=choices,
+        use_shortcuts=False,
+        style=questionary.Style([
+            ("highlighted", "bold cyan"),
+            ("selected",    "bold green"),
+        ]),
+    ).ask()
+
+
+def _export_license() -> None:
+    """Export a license record from the DB to a .lic file on disk."""
+    project_id, _ = pick_project()
+    if not project_id:
+        return
+
+    lic = _pick_license(project_id)
+    if lic is None:
+        return
+
+    lic_dir = _PROJECTS_DIR / project_id / "licenses"
+    safe_name = lic.client_name.replace(" ", "_").replace("/", "-")
+    lic_file = lic_dir / f"{safe_name}.lic"
+
+    if lic_file.exists():
+        if not Confirm.ask(f"檔案 [yellow]{lic_file}[/yellow] 已存在，是否覆蓋？"):
+            console.print("[dim]已取消[/dim]")
+            return
+
+    lic_dir.mkdir(parents=True, exist_ok=True)
+    lic_file.write_text(lic.license_json, encoding="utf-8")
+    update_license_file_path(lic.id, str(lic_file))
+    console.print(f"[green]✓ 已匯出至 {lic_file}[/green]")
 
 
 def _revoke_license() -> None:

@@ -142,3 +142,19 @@ def revoke_license(license_id: int) -> bool:
         lic.revoked = True
         lic.revoked_at = datetime.now()
     return True
+
+
+def get_license(license_id: int) -> License | None:
+    """Return a License by id, or None."""
+    with get_session() as s:
+        return s.get(License, license_id)
+
+
+def update_license_file_path(license_id: int, path: str) -> bool:
+    """Update lic_file_path for a license record. Returns True if found."""
+    with get_session() as s:
+        lic = s.get(License, license_id)
+        if lic is None:
+            return False
+        lic.lic_file_path = path
+    return True
