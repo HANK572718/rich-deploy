@@ -47,6 +47,14 @@ _BACK = "← 返回"
 _CANCEL = "← 取消"
 
 
+def _ask(prompt_fn):
+    """Wrap a questionary call; return None on Ctrl+C instead of raising."""
+    try:
+        return prompt_fn()
+    except KeyboardInterrupt:
+        return None
+
+
 # ── Storage helpers ───────────────────────────────────────────────────────────
 
 def _keys_dir() -> Path:
@@ -66,10 +74,10 @@ def _licenses_dir() -> Path:
 def _project_menu() -> None:
     """Interactive submenu for project management."""
     while True:
-        action = questionary.select(
+        action = _ask(lambda: questionary.select(
             "📁 專案管理",
             choices=["列出所有專案", "新增專案", _BACK],
-        ).ask()
+        ).ask())
         if action is None or action == _BACK:
             return
         if action == "列出所有專案":
@@ -83,9 +91,9 @@ def _list_projects() -> None:
     if not projects:
         console.print("[yellow]尚無任何專案。請選擇「新增專案」。[/yellow]")
         return
-    t = Table(show_header=True, header_style="bold cyan", expand=False)
-    t.add_column("ID")
-    t.add_column("名稱")
+    t = Table(show_header=True, header_style="bold cyan")
+    t.add_column("ID", no_wrap=True)
+    t.add_column("名稱", no_wrap=True)
     t.add_column("前綴")
     t.add_column("版本")
     t.add_column("有效天數", justify="right")
@@ -97,19 +105,19 @@ def _list_projects() -> None:
 
 
 def _create_project_tui() -> None:
-    pid = questionary.text("專案 ID（英文大寫，例 MY_PROJ）：").ask()
+    pid = _ask(lambda: questionary.text("專案 ID（英文大寫，例 MY_PROJ）：").ask())
     if not pid:
         return
     pid = pid.upper()
     if get_project(pid):
         console.print(f"[red]專案 '{pid}' 已存在。[/red]")
         return
-    name = questionary.text("顯示名稱：").ask()
-    prefix = questionary.text("環境變數前綴（英文大寫）：").ask()
+    name = _ask(lambda: questionary.text("顯示名稱：").ask())
+    prefix = _ask(lambda: questionary.text("環境變數前綴（英文大寫）：").ask())
     if not name or not prefix:
         return
-    version = questionary.text("版本號：", default="1.0.0").ask()
-    days = questionary.text("授權有效天數：", default="365").ask()
+    version = _ask(lambda: questionary.text("版本號：", default="1.0.0").ask())
+    days = _ask(lambda: questionary.text("授權有效天數：", default="365").ask())
     try:
         validity = int(days)
     except ValueError:
@@ -139,18 +147,18 @@ def _key_menu() -> None:
     if not projects:
         console.print("[yellow]尚無任何專案。請先建立專案。[/yellow]")
         return
-    pid = questionary.select(
+    pid = _ask(lambda: questionary.select(
         "🔑 金鑰管理 — 選擇專案：",
         choices=[p.id for p in projects] + [_BACK],
-    ).ask()
+    ).ask())
     if pid is None or pid == _BACK:
         return
 
     while True:
-        action = questionary.select(
+        action = _ask(lambda: questionary.select(
             f"🔑 金鑰管理 — {pid}",
             choices=["列出金鑰", "產生新金鑰對", "顯示公鑰 PEM", _BACK],
-        ).ask()
+        ).ask())
         if action is None or action == _BACK:
             return
         if action == "列出金鑰":
@@ -221,18 +229,18 @@ def _license_menu() -> None:
     if not projects:
         console.print("[yellow]尚無任何專案。請先建立專案。[/yellow]")
         return
-    pid = questionary.select(
+    pid = _ask(lambda: questionary.select(
         "📄 授權管理 — 選擇專案：",
         choices=[p.id for p in projects] + [_BACK],
-    ).ask()
+    ).ask())
     if pid is None or pid == _BACK:
         return
 
     while True:
-        action = questionary.select(
+        action = _ask(lambda: questionary.select(
             f"📄 授權管理 — {pid}",
             choices=["列出授權", "簽發新授權", "撤銷授權", "匯出 .lic 檔", _BACK],
-        ).ask()
+        ).ask())
         if action is None or action == _BACK:
             return
         if action == "列出授權":
@@ -276,13 +284,17 @@ def _issue_license_tui(project_id: str) -> None:
         console.print(f"[red]私鑰不存在：{priv_path}[/red]")
         return
 
-    fp = questionary.text("機器指紋（64 字元 hex）：").ask()
+    fp = _ask(lambda: questionary.text("機器指紋（64 字元 hex）：").ask())
     if not fp or len(fp) != 64:
         console.print("[red]指紋格式不正確（需 64 字元 hex）。[/red]")
         return
-    client = questionary.text("客戶名稱：", default="unnamed").ask()
-    expires = questionary.text("到期日 YYYY-MM-DD（留空 = 永久授權）：", default="").ask()
-    mac = questionary.text("MAC 位址（審計用，可留空）：", default="").ask()
+    client = _ask(lambda: questionary.text("客戶名稱：", default="unnamed").ask())
+    if client is None:
+        return
+    expires = _ask(lambda: questionary.text("到期日 YYYY-MM-DD（留空 = 永久授權）：", default="").ask())
+    if expires is None:
+        return
+    mac = _ask(lambda: questionary.text("MAC 位址（審計用，可留空）：", default="").ask())
 
     try:
         lic_data = sign(
@@ -327,8 +339,8 @@ def _revoke_license_tui(project_id: str) -> None:
         console.print("[yellow]無可撤銷的授權。[/yellow]")
         return
     choices = [f"#{l.id}  {l.client_name}  ({l.machine_fp[:8]}...)" for l in active] + [_CANCEL]
-    sel = questionary.select("選擇要撤銷的授權：", choices=choices).ask()
-    if sel is None or sel == _CANCEL:
+    sel = _ask(lambda: questionary.select("選擇要撤銷的授權：", choices=choices).ask())
+    if not sel or sel == _CANCEL:
         return
     lic_id = int(sel.split("#")[1].split()[0])
     if revoke_license(lic_id):
@@ -344,8 +356,8 @@ def _export_license_tui(project_id: str) -> None:
         f"#{l.id}  {l.client_name}  ({'已撤銷' if l.revoked else '有效'})"
         for l in lics
     ] + [_CANCEL]
-    sel = questionary.select("選擇要匯出的授權：", choices=choices).ask()
-    if sel is None or sel == _CANCEL:
+    sel = _ask(lambda: questionary.select("選擇要匯出的授權：", choices=choices).ask())
+    if not sel or sel == _CANCEL:
         return
     lic_id = int(sel.split("#")[1].split()[0])
     lic = get_license(lic_id)
@@ -368,10 +380,10 @@ def _sdk_menu() -> None:
     if not projects:
         console.print("[yellow]尚無任何專案。[/yellow]")
         return
-    pid = questionary.select(
+    pid = _ask(lambda: questionary.select(
         "📦 SDK 匯出 — 選擇專案：",
         choices=[p.id for p in projects] + [_BACK],
-    ).ask()
+    ).ask())
     if pid is None or pid == _BACK:
         return
 
@@ -381,7 +393,7 @@ def _sdk_menu() -> None:
         console.print("[red]無可用金鑰。請先產生金鑰。[/red]")
         return
 
-    out_raw = questionary.text(f"輸出目錄（直接 Enter 使用預設 ./dist/{pid}）：", default="").ask()
+    out_raw = _ask(lambda: questionary.text(f"輸出目錄（直接 Enter 使用預設 ./dist/{pid}）：", default="").ask())
     out_dir = Path(out_raw) if out_raw else Path.cwd() / "dist" / pid
 
     if not _TEMPLATE_DIR.exists():
@@ -427,7 +439,7 @@ def _settings_menu() -> None:
         cfg_status = f"[green]存在[/green]" if cfg_file.exists() else "[dim]不存在（使用預設值）[/dim]"
         console.print(f"  設定檔 {cfg_file.name} : {cfg_status}")
 
-        action = questionary.select(
+        action = _ask(lambda: questionary.select(
             "設定選項：",
             choices=[
                 "修改 DB 路徑（database.url）",
@@ -437,15 +449,15 @@ def _settings_menu() -> None:
                 "重設為預設值（刪除 licmgr.toml）",
                 _BACK,
             ],
-        ).ask()
+        ).ask())
 
         if action is None or action == _BACK:
             return
 
         if "DB 路徑" in action:
-            val = questionary.text(
+            val = _ask(lambda: questionary.text(
                 "DB URL（例：sqlite:///db/registry.db 或絕對路徑 sqlite:////home/user/reg.db）："
-            ).ask()
+            ).ask())
             if val:
                 config.setdefault("database", {})["url"] = val
                 save_config(config)
@@ -453,18 +465,18 @@ def _settings_menu() -> None:
                 console.print("[green]✓ DB 路徑已更新，重新連線將使用新路徑。[/green]")
 
         elif "金鑰根目錄" in action:
-            val = questionary.text(
+            val = _ask(lambda: questionary.text(
                 f"金鑰根目錄絕對路徑（預設：{default_keys}）："
-            ).ask()
+            ).ask())
             if val:
                 config.setdefault("storage", {})["keys_dir"] = val
                 save_config(config)
                 console.print("[green]✓ 金鑰根目錄已更新。[/green]")
 
         elif "授權檔根目錄" in action:
-            val = questionary.text(
+            val = _ask(lambda: questionary.text(
                 f"授權檔根目錄路徑（預設：{default_lic}）："
-            ).ask()
+            ).ask())
             if val:
                 config.setdefault("storage", {})["licenses_dir"] = val
                 save_config(config)
@@ -501,11 +513,15 @@ def main() -> None:
         "🚪  離開": None,
     }
 
-    while True:
-        choice = questionary.select("主選單", choices=list(menu_items.keys())).ask()
-        if choice is None or choice == "🚪  離開":
-            console.print("[dim]再見。[/dim]")
-            sys.exit(0)
-        fn = menu_items.get(choice)
-        if fn:
-            fn()
+    try:
+        while True:
+            choice = _ask(lambda: questionary.select("主選單", choices=list(menu_items.keys())).ask())
+            if choice is None or choice == "🚪  離開":
+                console.print("[dim]再見。[/dim]")
+                sys.exit(0)
+            fn = menu_items.get(choice)
+            if fn:
+                fn()
+    except KeyboardInterrupt:
+        console.print("\n[dim]已中斷。[/dim]")
+        sys.exit(0)
