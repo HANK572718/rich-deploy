@@ -17,6 +17,7 @@ Usage (from the licmgr project directory):
     poetry licmgr sdk export MY_PROJ --output /path/to/dist
 """
 
+from cleo.commands.command import Command
 from poetry.plugins.application_plugin import ApplicationPlugin
 
 from licmgr.commands.key import KeyGenerateCommand, KeyListCommand, KeyShowCommand
@@ -64,12 +65,26 @@ class _LicmgrSdkExport(SdkExportCommand):
     name = "licmgr sdk export"
 
 
+class _LicmgrTui(Command):
+    """Launch the interactive licmgr TUI."""
+
+    name = "licmgr tui"
+    description = "Launch the interactive licmgr TUI (arrow-key menus)"
+
+    def handle(self) -> int:
+        """Run the TUI main loop."""
+        from licmgr.tui import main
+        main()
+        return 0
+
+
 class LicmgrPlugin(ApplicationPlugin):
     """Poetry plugin that registers `poetry licmgr *` commands for license management."""
 
     def activate(self, application) -> None:  # type: ignore[override]
         """Register all licmgr-namespaced commands with Poetry's command loader."""
         commands = [
+            _LicmgrTui,
             _LicmgrProjectCreate,
             _LicmgrProjectList,
             _LicmgrKeyGenerate,
