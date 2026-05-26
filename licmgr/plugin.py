@@ -68,7 +68,7 @@ class _LicmgrSdkExport(SdkExportCommand):
 class _LicmgrTui(Command):
     """Launch the interactive licmgr TUI."""
 
-    name = "licmgr tui"
+    name = "licmgr"
     description = "Launch the interactive licmgr TUI (arrow-key menus)"
 
     def handle(self) -> int:
