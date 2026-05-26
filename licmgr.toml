@@ -1,9 +1,7 @@
 [database]
 url = "sqlite:///db/registry.db"
-# Future PostgreSQL:
-# url = "postgresql://user:pass@localhost/rich_deploy"
 
 [defaults]
-key_algorithm        = "rsa2048"
+key_algorithm = "rsa2048"
 default_validity_days = 365
-fp_version           = 1
+fp_version = 1

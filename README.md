@@ -19,10 +19,10 @@ poetry self add git+https://github.com/HANK572718/simple_license_manager.git
 
 ```bash
 git clone https://github.com/HANK572718/simple_license_manager.git
-poetry self add ./simple_license_manager
+poetry self add your_path # 路徑要使用絕對路徑
 ```
 
-> 本機修改後重新執行 `poetry self add ./simple_license_manager` 即可更新。
+> 本機修改後重新執行 `poetry self add your_path` 即可更新。
 
 ---
 
