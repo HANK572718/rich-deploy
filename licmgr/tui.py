@@ -17,12 +17,16 @@ from rich.panel import Panel
 from rich.table import Table
 
 from licmgr.core.db import engine as _engine_mod
+from sqlalchemy import select
+
 from licmgr.core.db.engine import (
     LICMGR_DATA_DIR,
     get_config,
+    get_session,
     init_db,
     save_config,
 )
+from licmgr.core.db.models import Key, License, Project
 from licmgr.core.db.crud import (
     create_key,
     create_license,
@@ -417,6 +421,121 @@ def _sdk_menu() -> None:
     console.print("  [dim]將整個目錄交付給客戶即可。[/dim]")
 
 
+# ── Import menu ───────────────────────────────────────────────────────────────
+
+def _import_db() -> None:
+    """Import projects, keys and licenses from another licmgr SQLite database."""
+    import sqlite3
+
+    src_raw = _ask(lambda: questionary.text("舊資料庫路徑（.db 檔案）：").ask())
+    if not src_raw:
+        return
+    src_path = Path(src_raw).expanduser()
+    if not src_path.exists():
+        console.print(f"[red]找不到檔案：{src_path}[/red]")
+        return
+
+    try:
+        src_conn = sqlite3.connect(str(src_path))
+        src_conn.row_factory = sqlite3.Row
+        proj_rows = src_conn.execute("SELECT * FROM projects").fetchall()
+        key_rows  = src_conn.execute("SELECT * FROM keys").fetchall()
+        lic_rows  = src_conn.execute("SELECT * FROM licenses").fetchall()
+        src_conn.close()
+    except Exception as e:
+        console.print(f"[red]無法讀取資料庫（格式不相容）：{e}[/red]")
+        return
+
+    console.print(
+        f"\n發現：[cyan]{len(proj_rows)}[/cyan] 個專案、"
+        f"[cyan]{len(key_rows)}[/cyan] 筆金鑰、"
+        f"[cyan]{len(lic_rows)}[/cyan] 筆授權"
+    )
+    confirm = _ask(lambda: questionary.confirm("確認匯入？", default=True).ask())
+    if not confirm:
+        return
+
+    p_ok = p_skip = k_ok = k_skip = l_ok = l_skip = 0
+
+    def _dt(val):
+        return datetime.fromisoformat(val) if val else None
+
+    with get_session() as sess:
+        for row in proj_rows:
+            if sess.get(Project, row["id"]):
+                p_skip += 1
+                continue
+            sess.add(Project(
+                id=row["id"],
+                display_name=row["display_name"],
+                env_prefix=row["env_prefix"],
+                version=row["version"],
+                fp_version=row["fp_version"],
+                validity_days=row["validity_days"],
+                created_at=_dt(row["created_at"]),
+                git_remote=row["git_remote"],
+                project_root=row["project_root"],
+                git_user_name=row["git_user_name"],
+                git_user_email=row["git_user_email"],
+            ))
+            p_ok += 1
+
+        for row in key_rows:
+            dup = sess.execute(
+                select(Key).where(Key.project_id == row["project_id"], Key.version == row["version"])
+            ).scalars().first()
+            if dup:
+                k_skip += 1
+                continue
+            sess.add(Key(
+                project_id=row["project_id"],
+                version=row["version"],
+                algorithm=row["algorithm"],
+                public_key_pem=row["public_key_pem"],
+                public_key_fp=row["public_key_fp"],
+                private_key_path=row["private_key_path"],
+                created_at=_dt(row["created_at"]),
+                retired_at=_dt(row["retired_at"]),
+                notes=row["notes"],
+            ))
+            k_ok += 1
+
+        for row in lic_rows:
+            dup = sess.execute(
+                select(License).where(
+                    License.project_id == row["project_id"],
+                    License.machine_fp  == row["machine_fp"],
+                    License.issued_at   == _dt(row["issued_at"]),
+                )
+            ).scalars().first()
+            if dup:
+                l_skip += 1
+                continue
+            sess.add(License(
+                project_id=row["project_id"],
+                client_name=row["client_name"],
+                machine_fp=row["machine_fp"],
+                fp_version=row["fp_version"],
+                key_version=row["key_version"],
+                mac_hint=row["mac_hint"],
+                issued_at=_dt(row["issued_at"]),
+                expires_at=_dt(row["expires_at"]),
+                license_json=row["license_json"],
+                lic_file_path=row["lic_file_path"],
+                revoked=bool(row["revoked"]),
+                revoked_at=_dt(row["revoked_at"]),
+                notes=row["notes"],
+            ))
+            l_ok += 1
+
+    console.print("\n[green]✓ 匯入完成[/green]")
+    console.print(f"  專案：{p_ok} 新增  {p_skip} 略過（已存在）")
+    console.print(f"  金鑰：{k_ok} 新增  {k_skip} 略過（已存在）")
+    console.print(f"  授權：{l_ok} 新增  {l_skip} 略過（已存在）")
+    if k_ok:
+        console.print("[dim]  提示：私鑰路徑仍指向原始位置，請確認金鑰檔案可存取。[/dim]")
+
+
 # ── Settings menu ─────────────────────────────────────────────────────────────
 
 def _settings_menu() -> None:
@@ -509,6 +628,7 @@ def main() -> None:
         "🔑  金鑰管理": _key_menu,
         "📄  授權管理": _license_menu,
         "📦  SDK 匯出": _sdk_menu,
+        "📥  匯入舊資料庫": _import_db,
         "⚙   設定": _settings_menu,
         "🚪  離開": None,
     }
