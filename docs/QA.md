@@ -73,9 +73,9 @@ DB 的 `keys` table 支援多版本（`version` 欄位），用於金鑰輪換�
 #### `projects` 表
 | 欄位 | 說明 |
 |------|------|
-| id | 專案唯一 ID（如 `GIT_SmartSOPGuardian`） |
+| id | 專案唯一 ID（如 `AcmeVision`） |
 | display_name | 顯示名稱 |
-| env_prefix | 環境變數前綴（如 `SSOPG`） |
+| env_prefix | 環境變數前綴（如 `ACMEV`） |
 | version | 軟體版本號 |
 | fp_version | 指紋演算法版本（目前固定為 1） |
 | validity_days | 預設授權天數 |
@@ -163,13 +163,13 @@ with get_session() as s:
 
 ```
 Projects: 1 筆
-  GIT_SmartSOPGuardian  [SSOPG]
+  AcmeVision  [ACMEV]
 
 Keys: 1 筆
-  GIT_SmartSOPGuardian v1  公鑰指紋: 47b201bab9a92fa6...
+  AcmeVision v1  公鑰指紋: 47b201bab9a92fa6...
 
 Licenses: 1 筆
   client: local_test
   machine_fp: 3335b4a38bfd260d...（本機開發機）
-  lic_file: projects/GIT_SmartSOPGuardian/licenses/local_test.lic
+  lic_file: projects/AcmeVision/licenses/local_test.lic
 ```

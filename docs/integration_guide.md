@@ -1,6 +1,6 @@
 # 專案整合指南：如何將授權驗證加入目標專案
 
-本文件以 `GIT_SmartSOPGuardian` 為例，說明如何將 `rich_deploy` 匯出的客戶端 SDK
+本文件以 `AcmeVision` 為例，說明如何將 `rich_deploy` 匯出的客戶端 SDK
 整合進目標專案的主程式。
 
 ---
@@ -10,16 +10,16 @@
 在目標專案整合前，需先在 `rich_deploy` 完成以下步驟：
 
 ```
-① [k] 為 GIT_SmartSOPGuardian 產生金鑰對
+① [k] 為 AcmeVision 產生金鑰對
 ② [l] 對目標機器的指紋簽發授權，產生 local_test.lic
-③ [e] 匯出客戶端 SDK → dist/GIT_SmartSOPGuardian/
+③ [e] 匯出客戶端 SDK → dist/AcmeVision/
 ```
 
-匯出後確認 `dist/GIT_SmartSOPGuardian/` 包含：
+匯出後確認 `dist/AcmeVision/` 包含：
 
 ```
-dist/GIT_SmartSOPGuardian/
-  verify_license.py   ← 公鑰已嵌入，ENV_PREFIX 已設為 "SSOPG"
+dist/AcmeVision/
+  verify_license.py   ← 公鑰已嵌入，ENV_PREFIX 已設為 "ACMEV"
   get_fingerprint.py  ← 採集指紋用
   bootstrap.py        ← 客戶一鍵部署精靈
 ```
@@ -31,13 +31,13 @@ dist/GIT_SmartSOPGuardian/
 將 SDK 放在專案根目錄的 `license/` 子資料夾，與業務程式碼分開：
 
 ```
-GIT_SmartSOPGuardian/          ← 你的目標專案根目錄
+AcmeVision/          ← 你的目標專案根目錄
 │
 ├── src/
 │   ├── __init__.py
 │   └── main.py                ← 主程式，在此呼叫授權驗證
 │
-├── license/                   ← 從 dist/GIT_SmartSOPGuardian/ 複製過來
+├── license/                   ← 從 dist/AcmeVision/ 複製過來
 │   ├── __init__.py            ← 空檔，讓 Python 認識這個 package
 │   ├── verify_license.py      ← 含嵌入公鑰，不要手動修改
 │   ├── get_fingerprint.py     ← 交給客戶用，採集指紋
@@ -93,11 +93,11 @@ def main():
     # 授權驗證 — 放在最前面，任何業務邏輯之前
     if not verify_license():
         print("授權驗證失敗，程式無法啟動。")
-        print("請確認 license.lic 存在，或設定環境變數 SSOPG_LICENSE_FILE。")
+        print("請確認 license.lic 存在，或設定環境變數 ACMEV_LICENSE_FILE。")
         sys.exit(1)
 
     # ── 以下是正常業務邏輯 ──────────────────────────
-    print("授權通過，啟動 GIT_SmartSOPGuardian...")
+    print("授權通過，啟動 AcmeVision...")
     # ...
 
 
@@ -120,7 +120,7 @@ if not verify_license(license_path="/opt/app/license.lic"):
 `verify_license()` 不傳路徑時，自動讀取環境變數：
 
 ```
-SSOPG_LICENSE_FILE=/path/to/license.lic
+ACMEV_LICENSE_FILE=/path/to/license.lic
 ```
 
 ```python
@@ -133,10 +133,10 @@ if not verify_license():
 
 ```bash
 # Linux / macOS（寫入 ~/.bashrc 或 ~/.zshrc）
-export SSOPG_LICENSE_FILE=/home/user/app/license.lic
+export ACMEV_LICENSE_FILE=/home/user/app/license.lic
 
 # Windows PowerShell（永久寫入使用者環境變數）
-setx SSOPG_LICENSE_FILE "C:\app\license.lic"
+setx ACMEV_LICENSE_FILE "C:\app\license.lic"
 
 # 或讓客戶執行 bootstrap.py，精靈會自動設定
 python license/bootstrap.py
@@ -150,7 +150,7 @@ python license/bootstrap.py
 
 ```
 1. 呼叫時傳入的 license_path 參數          ← 最高優先
-2. 環境變數 SSOPG_LICENSE_FILE
+2. 環境變數 ACMEV_LICENSE_FILE
 3. 當前工作目錄的 license.lic              ← 預設 fallback
 ```
 
@@ -191,7 +191,7 @@ def main():
         sys.exit(1)
 
     # 業務邏輯...
-    print("GIT_SmartSOPGuardian 啟動成功")
+    print("AcmeVision 啟動成功")
 
 
 if __name__ == "__main__":
